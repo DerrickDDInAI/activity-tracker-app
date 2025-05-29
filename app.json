@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "bolt-expo-nativewind",
+    "slug": "bolt-expo-nativewind",
+    "version": "1.0.0",
+    "orientation": "portrait",
+
+    // Your app icon (used everywhere by default)
+    "icon": "./assets/images/icon.png",
+
+    // Use the expo-splash-screen plugin instead of the top-level splash key
+    // (it’ll generate the right native code for both iOS & Android)
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.8.10"
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+
+    "scheme": "myapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+
+    "assetBundlePatterns": [
+      "assets/images/*"
+    ],
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.boltexponativewind"
+    },
+
+    "android": {
+      // launcher icon
+      "icon": "./assets/images/icon.png",
+
+      // adaptive icon: only foregroundImage + backgroundColor allowed
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff",
+        "monochromeImage": "./assets/images/icon.png"
+      },
+
+      // package name and any extra Gradle props
+      "package": "com.anonymous.boltexponativewind",
+      "gradleProperties": {
+        "org.gradle.jvmargs": "-Xmx2048m -XX:MaxPermSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8",
+        "kotlin.jvm.target.validation.mode": "IGNORE"
+      }
+    },
+
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    }
+  }
+}
