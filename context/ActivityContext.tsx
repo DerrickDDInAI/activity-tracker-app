@@ -22,14 +22,17 @@ if (Platform.OS !== 'web') {
 }
 
 // Define types
-type ActivityType = 'instant' | 'duration';
+export type ActivityType = 'instant' | 'duration';
 
-type NotificationConfig = {
+export type NotificationConfig = {
   enabled: boolean;
+  hours: number;
+  minutes: number;
   seconds: number;
+  customMessage?: string;
 };
 
-type Activity = {
+export type Activity = {
   id: string;
   name: string;
   color: string;
@@ -89,25 +92,56 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
     }
 
-    const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Activity Reminder',
-        body: `Time to check your activity "${activity.name}"`,
-      },
-      trigger: {
-        seconds: activity.notificationConfig.seconds,
-        repeats: false
-      } as Notifications.NotificationTriggerInput,
-    });
+    // Calculate total seconds for the reminder
+    const totalSeconds = (activity.notificationConfig.hours * 3600) + 
+                        (activity.notificationConfig.minutes * 60) + 
+                        activity.notificationConfig.seconds;
 
-    // Update activity with new notification ID
-    setActivities(prev =>
-      prev.map(a =>
-        a.id === activity.id
-          ? { ...a, lastNotificationId: notificationId }
-          : a
-      )
-    );
+    // Only schedule if we have a last tracked time
+    if (!activity.lastTracked) return;
+
+    const lastTrackedDate = new Date(activity.lastTracked);
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now.getTime() - lastTrackedDate.getTime()) / 1000);
+    
+    // If elapsed time hasn't reached the threshold yet, schedule for the remaining time
+    if (elapsedSeconds < totalSeconds) {
+      const remainingSeconds = totalSeconds - elapsedSeconds;
+      const message = activity.notificationConfig.customMessage || `Time to check your activity "${activity.name}"`;
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Activity Reminder',
+          body: `${message} (${formatElapsedTime(totalSeconds * 1000)})`,
+        },
+        trigger: {
+          seconds: remainingSeconds,
+          repeats: false
+        } as Notifications.NotificationTriggerInput,
+      });
+
+      // Update activity with new notification ID
+      setActivities(prev =>
+        prev.map(a =>
+          a.id === activity.id
+            ? { ...a, lastNotificationId: notificationId }
+            : a
+        )
+      );
+    }
+  };
+
+  // Helper function to format elapsed time
+  const formatElapsedTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return `${seconds}s ago`;
   };
 
   // Update notification configuration

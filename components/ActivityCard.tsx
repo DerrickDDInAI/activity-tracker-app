@@ -11,14 +11,23 @@ import {
 } from 'react-native';
 import { getLightColor, getActivityIcon, formatTimeSince, formatDuration } from '@/utils/activityUtils';
 import { useActivities } from '@/context/ActivityContext';
+import type { Activity } from '@/context/ActivityContext';
 import { Trash2, Bell, BellOff } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
+import ReminderSettingsModal from './ReminderSettingsModal';
 
-const ActivityCard = ({ activity, onPress, onLongPress }) => {
+type ActivityCardProps = {
+  activity: Activity;
+  onPress: () => void;
+  onLongPress: () => void;
+};
+
+const ActivityCard = ({ activity, onPress, onLongPress }: ActivityCardProps) => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [timeElapsed, setTimeElapsed] = useState('');
+  const [reminderSettingsVisible, setReminderSettingsVisible] = useState(false);
   const { getLatestRecord, deleteActivity, trackActivity, stopTracking, updateNotificationConfig } = useActivities();
   
   const ActivityIcon = getActivityIcon(activity.icon);
@@ -97,67 +106,52 @@ const ActivityCard = ({ activity, onPress, onLongPress }) => {
     );
   };
 
+  const formatReminderTime = (config: { hours: number; minutes: number; seconds: number }) => {
+    const parts = [];
+    if (config.hours > 0) parts.push(`${config.hours}h`);
+    if (config.minutes > 0) parts.push(`${config.minutes}m`);
+    if (config.seconds > 0 || parts.length === 0) parts.push(`${config.seconds}s`);
+    return parts.join(' ');
+  };
+
   const handleNotificationToggle = async () => {
     if (Platform.OS === 'web') return;
 
-    if (!activity.notificationConfig?.enabled) {
-      const { status } = await Notifications.getPermissionsAsync();
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert(
-            'Permission Required',
-            'Please enable notifications in your device settings to use this feature.'
-          );
-          return;
-        }
+        Alert.alert(
+          'Permission Required',
+          'Please enable notifications in your device settings to use this feature.'
+        );
+        return;
       }
-
-      // Show time picker alert
-      Alert.prompt(
-        'Set Reminder Time',
-        'Enter time in seconds',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'OK',
-            onPress: (seconds) => {
-              const secondsNum = parseInt(seconds, 10);
-              if (!isNaN(secondsNum) && secondsNum > 0) {
-                updateNotificationConfig(activity.id, {
-                  enabled: true,
-                  seconds: secondsNum,
-                });
-              }
-            },
-          },
-        ],
-        'plain-text',
-        activity.notificationConfig?.seconds?.toString() || '3600'
-      );
-    } else {
-      // Disable notifications
-      updateNotificationConfig(activity.id, {
-        enabled: false,
-        seconds: activity.notificationConfig.seconds,
-      });
     }
+
+    // Toggle notification state
+    updateNotificationConfig(activity.id, {
+      enabled: !activity.notificationConfig?.enabled,
+      hours: activity.notificationConfig?.hours || 0,
+      minutes: activity.notificationConfig?.minutes || 10,
+      seconds: activity.notificationConfig?.seconds || 0,
+      customMessage: activity.notificationConfig?.customMessage,
+    });
   };
 
-  const formatReminderTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    
-    const parts = [];
-    if (hours > 0) parts.push(`${hours}h`);
-    if (minutes > 0) parts.push(`${minutes}m`);
-    if (remainingSeconds > 0 || parts.length === 0) parts.push(`${remainingSeconds}s`);
-    
-    return parts.join(' ');
+  const handleBellLongPress = () => {
+    if (Platform.OS === 'web') return;
+    setReminderSettingsVisible(true);
+  };
+
+  const handleReminderSettingsSave = (config: { 
+    enabled: boolean; 
+    hours: number; 
+    minutes: number; 
+    seconds: number; 
+    customMessage?: string 
+  }) => {
+    updateNotificationConfig(activity.id, config);
   };
 
   return (
@@ -190,6 +184,8 @@ const ActivityCard = ({ activity, onPress, onLongPress }) => {
               <TouchableOpacity
                 style={styles.notificationButton}
                 onPress={handleNotificationToggle}
+                onLongPress={handleBellLongPress}
+                delayLongPress={500}
                 hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                 {activity.notificationConfig?.enabled ? (
                   <Bell size={20} color={isDark ? '#FFFFFF' : '#000000'} />
@@ -212,7 +208,7 @@ const ActivityCard = ({ activity, onPress, onLongPress }) => {
         <Text style={styles.lastTracked} numberOfLines={2}>
           {activity.isTracking ? 'Duration: ' : ''}{timeElapsed}
           {activity.notificationConfig?.enabled && (
-            `\nReminder: ${formatReminderTime(activity.notificationConfig.seconds)}`
+            `\nReminder in: ${formatReminderTime(activity.notificationConfig)}`
           )}
         </Text>
         {activity.type === 'duration' && (
@@ -226,6 +222,14 @@ const ActivityCard = ({ activity, onPress, onLongPress }) => {
           </View>
         )}
       </TouchableOpacity>
+
+      <ReminderSettingsModal
+        visible={reminderSettingsVisible}
+        onClose={() => setReminderSettingsVisible(false)}
+        activityName={activity.name}
+        notificationConfig={activity.notificationConfig || null}
+        onSave={handleReminderSettingsSave}
+      />
     </Animated.View>
   );
 };

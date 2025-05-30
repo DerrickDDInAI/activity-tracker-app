@@ -1,262 +1,261 @@
 import React, { useState } from 'react';
 import {
+  Modal,
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   TextInput,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  useColorScheme,
   Switch,
+  useColorScheme,
 } from 'react-native';
+import { X } from 'lucide-react-native';
 import { useActivities } from '@/context/ActivityContext';
-import { X, Bell } from 'lucide-react-native';
-import { ACTIVITY_COLORS, ACTIVITY_ICONS } from '@/constants/activities';
+import { ACTIVITY_ICONS, ACTIVITY_COLORS } from '@/constants/activities';
 import { getActivityIcon } from '@/utils/activityUtils';
-import * as Notifications from 'expo-notifications';
+import type { Activity, ActivityType } from '@/context/ActivityContext';
 
-const AddActivityModal = ({ visible, onClose }) => {
-  const [name, setName] = useState('');
-  const [selectedColor, setSelectedColor] = useState(ACTIVITY_COLORS[0]);
-  const [selectedIcon, setSelectedIcon] = useState(ACTIVITY_ICONS[0].id);
-  const [isDurationActivity, setIsDurationActivity] = useState(false);
-  const [enableNotifications, setEnableNotifications] = useState(false);
-  const [notificationHours, setNotificationHours] = useState('0');
-  const [notificationMinutes, setNotificationMinutes] = useState('0');
-  const [notificationSeconds, setNotificationSeconds] = useState('0');
-  const { addActivity } = useActivities();
+type ActivityIcon = {
+  id: string;
+  name: string;
+};
+
+type AddActivityModalProps = {
+  visible: boolean;
+  onClose: () => void;
+};
+
+export default function AddActivityModal({ visible, onClose }: AddActivityModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { addActivity } = useActivities();
 
-  const handleAddActivity = async () => {
-    if (name.trim()) {
-      let notificationConfig = null;
-      
-      if (enableNotifications && Platform.OS !== 'web') {
-        const { status } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          if (status !== 'granted') {
-            return;
-          }
-        }
-        
-        const totalSeconds = 
-          parseInt(notificationHours || '0', 10) * 3600 +
-          parseInt(notificationMinutes || '0', 10) * 60 +
-          parseInt(notificationSeconds || '0', 10);
-        
-        notificationConfig = {
-          enabled: true,
-          seconds: totalSeconds,
-        };
-      }
+  const [name, setName] = useState('');
+  const [selectedColor, setSelectedColor] = useState(ACTIVITY_COLORS[0]);
+  const [selectedIcon, setSelectedIcon] = useState<ActivityIcon>(ACTIVITY_ICONS[0]);
+  const [activityType, setActivityType] = useState<ActivityType>('instant');
+  const [enableNotifications, setEnableNotifications] = useState(false);
+  const [hours, setHours] = useState('0');
+  const [minutes, setMinutes] = useState('10');
+  const [seconds, setSeconds] = useState('0');
+  const [customMessage, setCustomMessage] = useState('');
 
-      addActivity({
-        name: name.trim(),
-        color: selectedColor,
-        icon: selectedIcon,
-        type: isDurationActivity ? 'duration' : 'instant',
-        notificationConfig,
-      });
-      resetForm();
-      onClose();
-    }
-  };
+  const handleSave = () => {
+    if (!name.trim()) return;
 
-  const resetForm = () => {
+    addActivity({
+      name: name.trim(),
+      color: selectedColor,
+      icon: selectedIcon.id,
+      type: activityType,
+      notificationConfig: enableNotifications ? {
+        enabled: true,
+        hours: Math.max(0, Math.min(Number(hours) || 0, 24)),
+        minutes: Math.max(0, Math.min(Number(minutes) || 0, 59)),
+        seconds: Math.max(0, Math.min(Number(seconds) || 0, 59)),
+        customMessage: customMessage.trim() || undefined,
+      } : undefined,
+    });
+
+    // Reset form
     setName('');
     setSelectedColor(ACTIVITY_COLORS[0]);
-    setSelectedIcon(ACTIVITY_ICONS[0].id);
-    setIsDurationActivity(false);
+    setSelectedIcon(ACTIVITY_ICONS[0]);
+    setActivityType('instant');
     setEnableNotifications(false);
-    setNotificationHours('0');
-    setNotificationMinutes('0');
-    setNotificationSeconds('0');
-  };
+    setHours('0');
+    setMinutes('10');
+    setSeconds('0');
+    setCustomMessage('');
 
-  const handleClose = () => {
-    resetForm();
     onClose();
   };
 
+  const handleTimeChange = (text: string, setter: (value: string) => void, max: number) => {
+    const num = text.replace(/[^0-9]/g, '');
+    if (num === '' || Number(num) <= max) {
+      setter(num);
+    }
+  };
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.centeredView}>
+    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+      <View style={styles.centeredView}>
         <View style={[styles.modalView, isDark && styles.modalViewDark]}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, isDark && styles.textDark]}>
-              Add New Activity
-            </Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <Text style={[styles.modalTitle, isDark && styles.textDark]}>Add Activity</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <X size={24} color={isDark ? '#FFFFFF' : '#000000'} />
             </TouchableOpacity>
           </View>
-          
-          <ScrollView style={styles.formContainer}>
-            <Text style={[styles.inputLabel, isDark && styles.textDark]}>
-              Activity Name
-            </Text>
+
+          <ScrollView style={styles.content}>
+            <Text style={[styles.label, isDark && styles.textDark]}>Activity Name</Text>
             <TextInput
               style={[styles.input, isDark && styles.inputDark]}
-              placeholder="e.g., Eating, Running, Reading"
-              placeholderTextColor={isDark ? '#8E8E93' : '#C7C7CC'}
               value={name}
               onChangeText={setName}
-              autoFocus
+              placeholder="Enter activity name"
+              placeholderTextColor={isDark ? '#666' : '#999'}
             />
 
-            <View style={styles.switchContainer}>
-              <Text style={[styles.inputLabel, isDark && styles.textDark]}>
-                Track Duration
-              </Text>
-              <Switch
-                value={isDurationActivity}
-                onValueChange={setIsDurationActivity}
-                trackColor={{ false: '#767577', true: '#81b0ff' }}
-                thumbColor={isDurationActivity ? '#007AFF' : '#f4f3f4'}
-              />
-            </View>
-
-            {Platform.OS !== 'web' && (
-              <>
-                <View style={styles.switchContainer}>
-                  <Text style={[styles.inputLabel, isDark && styles.textDark]}>
-                    Enable Reminders
-                  </Text>
-                  <Switch
-                    value={enableNotifications}
-                    onValueChange={setEnableNotifications}
-                    trackColor={{ false: '#767577', true: '#81b0ff' }}
-                    thumbColor={enableNotifications ? '#007AFF' : '#f4f3f4'}
-                  />
-                </View>
-
-                {enableNotifications && (
-                  <View style={styles.reminderContainer}>
-                    <Text style={[styles.inputLabel, isDark && styles.textDark]}>
-                      Remind me after:
-                    </Text>
-                    <View style={styles.timeInputContainer}>
-                      <View style={styles.timeInputGroup}>
-                        <TextInput
-                          style={[styles.timeInput, isDark && styles.inputDark]}
-                          keyboardType="numeric"
-                          value={notificationHours}
-                          onChangeText={(text) => {
-                            const number = parseInt(text, 10);
-                            if (!isNaN(number) && number >= 0) {
-                              setNotificationHours(text);
-                            }
-                          }}
-                          maxLength={2}
-                        />
-                        <Text style={[styles.timeLabel, isDark && styles.textDark]}>hours</Text>
-                      </View>
-                      <View style={styles.timeInputGroup}>
-                        <TextInput
-                          style={[styles.timeInput, isDark && styles.inputDark]}
-                          keyboardType="numeric"
-                          value={notificationMinutes}
-                          onChangeText={(text) => {
-                            const number = parseInt(text, 10);
-                            if (!isNaN(number) && number >= 0 && number < 60) {
-                              setNotificationMinutes(text);
-                            }
-                          }}
-                          maxLength={2}
-                        />
-                        <Text style={[styles.timeLabel, isDark && styles.textDark]}>min</Text>
-                      </View>
-                      <View style={styles.timeInputGroup}>
-                        <TextInput
-                          style={[styles.timeInput, isDark && styles.inputDark]}
-                          keyboardType="numeric"
-                          value={notificationSeconds}
-                          onChangeText={(text) => {
-                            const number = parseInt(text, 10);
-                            if (!isNaN(number) && number >= 0 && number < 60) {
-                              setNotificationSeconds(text);
-                            }
-                          }}
-                          maxLength={2}
-                        />
-                        <Text style={[styles.timeLabel, isDark && styles.textDark]}>sec</Text>
-                      </View>
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-            
-            <Text style={[styles.inputLabel, isDark && styles.textDark, { marginTop: 16 }]}>
-              Color
-            </Text>
+            <Text style={[styles.label, isDark && styles.textDark]}>Select Color</Text>
             <View style={styles.colorGrid}>
               {ACTIVITY_COLORS.map((color) => (
                 <TouchableOpacity
                   key={color}
                   style={[
-                    styles.colorOption,
+                    styles.colorItem,
                     { backgroundColor: color },
-                    selectedColor === color && styles.selectedColorOption,
+                    selectedColor === color && styles.selectedItem,
                   ]}
                   onPress={() => setSelectedColor(color)}
                 />
               ))}
             </View>
-            
-            <Text style={[styles.inputLabel, isDark && styles.textDark, { marginTop: 16 }]}>
-              Icon
-            </Text>
+
+            <Text style={[styles.label, isDark && styles.textDark]}>Select Icon</Text>
             <View style={styles.iconGrid}>
               {ACTIVITY_ICONS.map((icon) => {
-                const IconComponent = getActivityIcon(icon.id);
+                const Icon = getActivityIcon(icon.id);
                 return (
                   <TouchableOpacity
                     key={icon.id}
                     style={[
-                      styles.iconOption,
-                      isDark && styles.iconOptionDark,
-                      selectedIcon === icon.id && styles.selectedIconOption,
-                      selectedIcon === icon.id && { borderColor: selectedColor },
+                      styles.iconItem,
+                      isDark && styles.iconItemDark,
+                      selectedIcon.id === icon.id && styles.selectedItem,
                     ]}
-                    onPress={() => setSelectedIcon(icon.id)}>
-                    <IconComponent
-                      size={24}
-                      color={selectedIcon === icon.id ? selectedColor : (isDark ? '#FFFFFF' : '#000000')}
-                    />
+                    onPress={() => setSelectedIcon(icon)}>
+                    <Icon size={24} color={isDark ? '#FFFFFF' : '#000000'} />
                   </TouchableOpacity>
                 );
               })}
             </View>
+
+            <Text style={[styles.label, isDark && styles.textDark]}>Activity Type</Text>
+            <View style={styles.typeContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  isDark && styles.typeButtonDark,
+                  activityType === 'instant' && styles.selectedTypeButton,
+                ]}
+                onPress={() => setActivityType('instant')}>
+                <Text
+                  style={[
+                    styles.typeButtonText,
+                    isDark && styles.textDark,
+                    activityType === 'instant' && styles.selectedTypeButtonText,
+                  ]}>
+                  Instant
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.typeButton,
+                  isDark && styles.typeButtonDark,
+                  activityType === 'duration' && styles.selectedTypeButton,
+                ]}
+                onPress={() => setActivityType('duration')}>
+                <Text
+                  style={[
+                    styles.typeButtonText,
+                    isDark && styles.textDark,
+                    activityType === 'duration' && styles.selectedTypeButtonText,
+                  ]}>
+                  Duration
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.notificationSection}>
+              <View style={styles.switchRow}>
+                <Text style={[styles.label, isDark && styles.textDark]}>Enable Reminders</Text>
+                <Switch
+                  value={enableNotifications}
+                  onValueChange={setEnableNotifications}
+                  trackColor={{ false: '#767577', true: '#81b0ff' }}
+                  thumbColor={enableNotifications ? '#007AFF' : '#f4f3f4'}
+                />
+              </View>
+
+              {enableNotifications && (
+                <>
+                  <View style={styles.timeInputContainer}>
+                    <Text style={[styles.label, isDark && styles.textDark]}>
+                      Remind after:
+                    </Text>
+                    <View style={styles.timeInputs}>
+                      <View style={styles.timeInput}>
+                        <TextInput
+                          style={[styles.timeInputField, isDark && styles.inputDark]}
+                          value={hours}
+                          onChangeText={(text) => handleTimeChange(text, setHours, 24)}
+                          keyboardType="number-pad"
+                          placeholder="0"
+                          placeholderTextColor={isDark ? '#666' : '#999'}
+                        />
+                        <Text style={[styles.timeLabel, isDark && styles.textDark]}>hours</Text>
+                      </View>
+                      <View style={styles.timeInput}>
+                        <TextInput
+                          style={[styles.timeInputField, isDark && styles.inputDark]}
+                          value={minutes}
+                          onChangeText={(text) => handleTimeChange(text, setMinutes, 59)}
+                          keyboardType="number-pad"
+                          placeholder="10"
+                          placeholderTextColor={isDark ? '#666' : '#999'}
+                        />
+                        <Text style={[styles.timeLabel, isDark && styles.textDark]}>min</Text>
+                      </View>
+                      <View style={styles.timeInput}>
+                        <TextInput
+                          style={[styles.timeInputField, isDark && styles.inputDark]}
+                          value={seconds}
+                          onChangeText={(text) => handleTimeChange(text, setSeconds, 59)}
+                          keyboardType="number-pad"
+                          placeholder="0"
+                          placeholderTextColor={isDark ? '#666' : '#999'}
+                        />
+                        <Text style={[styles.timeLabel, isDark && styles.textDark]}>sec</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.messageSection}>
+                    <Text style={[styles.label, isDark && styles.textDark]}>
+                      Custom Message (optional)
+                    </Text>
+                    <TextInput
+                      style={[styles.messageInput, isDark && styles.inputDark]}
+                      value={customMessage}
+                      onChangeText={setCustomMessage}
+                      placeholder="Time to check your activity!"
+                      placeholderTextColor={isDark ? '#666' : '#999'}
+                      multiline
+                      numberOfLines={3}
+                    />
+                    <Text style={[styles.hint, isDark && styles.textDark]}>
+                      Note: Time elapsed will be automatically added to your message
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
           </ScrollView>
-          
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.addButton,
-                { backgroundColor: name.trim() ? '#007AFF' : '#C7C7CC' },
-              ]}
-              onPress={handleAddActivity}
-              disabled={!name.trim()}>
-              <Text style={styles.addButtonText}>Add Activity</Text>
-            </TouchableOpacity>
-          </View>
+
+          <TouchableOpacity
+            style={[styles.saveButton, { backgroundColor: '#007AFF' }]}
+            onPress={handleSave}>
+            <Text style={styles.saveButtonText}>Create Activity</Text>
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   centeredView: {
@@ -298,13 +297,13 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 8,
   },
-  formContainer: {
-    marginBottom: 20,
+  content: {
+    flexGrow: 0,
   },
-  inputLabel: {
+  label: {
     fontSize: 16,
     marginBottom: 8,
-    fontWeight: '500',
+    marginTop: 16,
   },
   input: {
     borderWidth: 1,
@@ -318,99 +317,126 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     backgroundColor: '#2C2C2E',
   },
-  switchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  reminderContainer: {
-    marginTop: 16,
-  },
-  timeInputContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  timeInputGroup: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  timeInput: {
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    width: 60,
-    textAlign: 'center',
-    marginRight: 8,
-  },
-  timeLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
-  },
   colorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -4,
   },
-  colorOption: {
+  colorItem: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    margin: 8,
-  },
-  selectedColorOption: {
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
+    margin: 4,
   },
   iconGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -4,
   },
-  iconOption: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    margin: 8,
+  iconItem: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    margin: 4,
+    backgroundColor: '#F2F2F7',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
   },
-  iconOptionDark: {
+  iconItemDark: {
     backgroundColor: '#2C2C2E',
-    borderColor: '#3A3A3C',
   },
-  selectedIconOption: {
-    borderWidth: 2,
+  selectedItem: {
+    borderWidth: 3,
+    borderColor: '#007AFF',
   },
-  buttonContainer: {
+  typeContainer: {
+    flexDirection: 'row',
     marginTop: 8,
   },
-  addButton: {
+  typeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F2F2F7',
+    marginHorizontal: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  typeButtonDark: {
+    backgroundColor: '#2C2C2E',
+  },
+  selectedTypeButton: {
+    backgroundColor: '#007AFF',
+  },
+  typeButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  selectedTypeButtonText: {
+    color: '#FFFFFF',
+  },
+  notificationSection: {
+    marginTop: 16,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  timeInputContainer: {
+    marginTop: 16,
+  },
+  timeInputs: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  timeInput: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  timeInputField: {
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 8,
+    padding: 8,
+    width: 60,
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  timeLabel: {
+    fontSize: 12,
+    marginTop: 4,
+    color: '#8E8E93',
+  },
+  messageSection: {
+    marginTop: 16,
+  },
+  messageInput: {
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+  },
+  saveButton: {
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
+    marginTop: 16,
   },
-  addButtonText: {
+  saveButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
 });
-
-export default AddActivityModal;
