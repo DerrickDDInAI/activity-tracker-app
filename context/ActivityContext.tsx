@@ -92,43 +92,50 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
     }
 
-    // Calculate total seconds for the reminder
-    const totalSeconds = (activity.notificationConfig.hours * 3600) + 
-                        (activity.notificationConfig.minutes * 60) + 
-                        activity.notificationConfig.seconds;
-
     // Only schedule if we have a last tracked time
     if (!activity.lastTracked) return;
+
+    // Calculate total seconds for the reminder threshold
+    const reminderThreshold = (activity.notificationConfig.hours * 3600) + 
+                            (activity.notificationConfig.minutes * 60) + 
+                            activity.notificationConfig.seconds;
 
     const lastTrackedDate = new Date(activity.lastTracked);
     const now = new Date();
     const elapsedSeconds = Math.floor((now.getTime() - lastTrackedDate.getTime()) / 1000);
-    
-    // If elapsed time hasn't reached the threshold yet, schedule for the remaining time
-    if (elapsedSeconds < totalSeconds) {
-      const remainingSeconds = totalSeconds - elapsedSeconds;
-      const message = activity.notificationConfig.customMessage || `Time to check your activity "${activity.name}"`;
 
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Activity Reminder',
-          body: `${message} (${formatElapsedTime(totalSeconds * 1000)})`,
-        },
-        trigger: {
-          seconds: remainingSeconds,
-          repeats: false
-        } as Notifications.NotificationTriggerInput,
-      });
-
-      // Update activity with new notification ID
-      setActivities(prev =>
-        prev.map(a =>
-          a.id === activity.id
-            ? { ...a, lastNotificationId: notificationId }
-            : a
-        )
-      );
+    // Only schedule if we haven't reached the threshold yet
+    if (elapsedSeconds >= reminderThreshold) {
+      // If threshold is already reached, don't schedule a new notification
+      return;
     }
+
+    const remainingSeconds = reminderThreshold - elapsedSeconds;
+    const message = activity.notificationConfig.customMessage || `Time to check your activity "${activity.name}"`;
+
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Activity Reminder',
+        body: `${message} (${formatElapsedTime(reminderThreshold * 1000)} since last activity)`,
+        data: {
+          activityId: activity.id,
+          thresholdReached: true,
+        },
+      },
+      trigger: {
+        seconds: remainingSeconds,
+        repeats: false
+      } as Notifications.NotificationTriggerInput,
+    });
+
+    // Update activity with new notification ID
+    setActivities(prev =>
+      prev.map(a =>
+        a.id === activity.id
+          ? { ...a, lastNotificationId: notificationId }
+          : a
+      )
+    );
   };
 
   // Helper function to format elapsed time
@@ -155,8 +162,10 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
 
     if (config.enabled) {
+      // Schedule notification only if it's enabled
       await scheduleNotification(updatedActivity);
     } else if (activity.lastNotificationId) {
+      // Cancel existing notification if notifications are disabled
       await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
     }
   };
@@ -304,18 +313,29 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         timestamp,
       };
       
+      // Cancel any existing notification first
+      if (activity.lastNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
+      }
+      
       setActivityRecords(prev => [...prev, newRecord]);
+      
+      // Update activity and schedule new notification
+      const updatedActivity = {
+        ...activity,
+        lastTracked: timestamp,
+        lastNotificationId: undefined // Clear the old notification ID
+      };
+
       setActivities(prev =>
         prev.map(a =>
-          a.id === id
-            ? { ...a, lastTracked: timestamp }
-            : a
+          a.id === id ? updatedActivity : a
         )
       );
 
-      // Schedule notification if enabled
+      // Schedule new notification if enabled
       if (activity.notificationConfig?.enabled) {
-        await scheduleNotification(activity);
+        await scheduleNotification(updatedActivity);
       }
     }
   };
@@ -338,18 +358,31 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       duration,
     };
 
+    // Cancel any existing notification first
+    if (activity.lastNotificationId) {
+      await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
+    }
+
     setActivityRecords(prev => [...prev, newRecord]);
+
+    // Update activity with new timestamp and clear old notification ID
+    const updatedActivity = {
+      ...activity,
+      isTracking: false,
+      trackingStartTime: undefined,
+      lastTracked: endTimestamp,
+      lastNotificationId: undefined // Clear the old notification ID
+    };
+
     setActivities(prev =>
       prev.map(a =>
-        a.id === id
-          ? { ...a, isTracking: false, trackingStartTime: undefined, lastTracked: endTimestamp }
-          : a
+        a.id === id ? updatedActivity : a
       )
     );
 
-    // Schedule notification if enabled
+    // Schedule new notification if enabled
     if (activity.notificationConfig?.enabled) {
-      await scheduleNotification(activity);
+      await scheduleNotification(updatedActivity);
     }
   };
 
