@@ -11,8 +11,16 @@ import {
 import { X } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useActivities } from '@/context/ActivityContext';
+import type { Activity } from '@/context/ActivityContext';
 
-const ManualEntryModal = ({ visible, onClose, activity }) => {
+type ManualEntryModalProps = {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (datetime: Date) => void;
+  activity: Activity | null;
+};
+
+const ManualEntryModal = ({ visible, onClose, onSave, activity }: ManualEntryModalProps) => {
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(Platform.OS === 'ios');
@@ -24,11 +32,12 @@ const ManualEntryModal = ({ visible, onClose, activity }) => {
   const { trackActivity, addManualDurationRecord } = useActivities();
 
   const handleSave = () => {
-    if (activity.type === 'duration') {
+    if (activity?.type === 'duration') {
       addManualDurationRecord(activity.id, startDate, endDate);
     } else {
       trackActivity(activity.id, startDate);
     }
+    onSave(startDate);
     onClose();
   };
 

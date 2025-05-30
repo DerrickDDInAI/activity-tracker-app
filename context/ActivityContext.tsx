@@ -1,16 +1,22 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { View, Text, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateUUID } from '@/utils/uuid';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+console.log('ActivityContext: Starting initialization...');
+
 // Configure notifications
 if (Platform.OS !== 'web') {
+  console.log('ActivityContext: Setting up notifications...');
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
     }),
   });
 }
@@ -68,9 +74,11 @@ const ACTIVITIES_STORAGE_KEY = '@activity_tracker_activities';
 const RECORDS_STORAGE_KEY = '@activity_tracker_records';
 
 export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  console.log('ActivityProvider: Component mounting...');
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityRecords, setActivityRecords] = useState<ActivityRecord[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Schedule notification for an activity
   const scheduleNotification = async (activity: Activity) => {
@@ -81,15 +89,15 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
     }
 
-    const trigger = new Date();
-    trigger.setSeconds(trigger.getSeconds() + activity.notificationConfig.seconds);
-
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Activity Reminder',
-        body: `It's been ${Math.floor(activity.notificationConfig.seconds / 3600)}h ${Math.floor((activity.notificationConfig.seconds % 3600) / 60)}m ${activity.notificationConfig.seconds % 60}s since you last tracked "${activity.name}"`,
+        body: `Time to check your activity "${activity.name}"`,
       },
-      trigger,
+      trigger: {
+        seconds: activity.notificationConfig.seconds,
+        repeats: false
+      } as Notifications.NotificationTriggerInput,
     });
 
     // Update activity with new notification ID
@@ -123,8 +131,12 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log('ActivityProvider: Loading data from storage...');
         const activitiesJson = await AsyncStorage.getItem(ACTIVITIES_STORAGE_KEY);
         const recordsJson = await AsyncStorage.getItem(RECORDS_STORAGE_KEY);
+        
+        console.log('ActivityProvider: Activities from storage:', activitiesJson);
+        console.log('ActivityProvider: Records from storage:', recordsJson);
         
         if (activitiesJson) {
           setActivities(JSON.parse(activitiesJson));
@@ -135,7 +147,9 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       } catch (error) {
         console.error('Error loading data from storage:', error);
+        setError(error instanceof Error ? error.message : 'Unknown error');
       } finally {
+        console.log('ActivityProvider: Data loading complete');
         setIsLoaded(true);
       }
     };
@@ -367,7 +381,17 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addManualDurationRecord,
         updateNotificationConfig,
       }}>
-      {children}
+      {error ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: 'red' }}>Error: {error}</Text>
+        </View>
+      ) : !isLoaded ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      ) : (
+        children
+      )}
     </ActivityContext.Provider>
   );
 };

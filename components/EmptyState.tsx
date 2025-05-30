@@ -2,7 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, useColorScheme } from 'react-native';
 import { Clock, ChartBar as BarChart2 } from 'lucide-react-native';
 
-const EmptyState = ({ message, icon }) => {
+type EmptyStateProps = {
+  message?: string;
+  icon?: 'clock' | 'bar-chart-2';
+};
+
+const EmptyState = ({ message, icon }: EmptyStateProps) => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
@@ -10,6 +15,9 @@ const EmptyState = ({ message, icon }) => {
   if (icon === 'bar-chart-2') {
     IconComponent = BarChart2;
   }
+
+  // Fallback message if none provided
+  const displayMessage = message || 'No activities found. Tap the + button to add your first activity.';
 
   return (
     <View style={styles.container}>
@@ -20,7 +28,7 @@ const EmptyState = ({ message, icon }) => {
         />
       </View>
       <Text style={[styles.message, isDark && styles.messageDark]}>
-        {message}
+        {displayMessage}
       </Text>
     </View>
   );

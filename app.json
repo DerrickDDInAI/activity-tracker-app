@@ -17,9 +17,7 @@
       [
         "expo-build-properties",
         {
-          "android": {
-            "kotlinVersion": "1.8.10"
-          }
+          "android": {}
         }
       ],
       [
@@ -46,22 +44,8 @@
     },
 
     "android": {
-      // launcher icon
-      "icon": "./assets/images/icon.png",
-
-      // adaptive icon: only foregroundImage + backgroundColor allowed
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#ffffff",
-        "monochromeImage": "./assets/images/icon.png"
-      },
-
       // package name and any extra Gradle props
-      "package": "com.anonymous.boltexponativewind",
-      "gradleProperties": {
-        "org.gradle.jvmargs": "-Xmx2048m -XX:MaxPermSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8",
-        "kotlin.jvm.target.validation.mode": "IGNORE"
-      }
+      "package": "com.anonymous.boltexponativewind"
     },
 
     "web": {

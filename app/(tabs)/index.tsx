@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   useColorScheme,
+  Text,
 } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import ActivityCard from '@/components/ActivityCard';
@@ -12,29 +13,35 @@ import AddActivityModal from '@/components/AddActivityModal';
 import ManualEntryModal from '@/components/ManualEntryModal';
 import { useActivities } from '@/context/ActivityContext';
 import EmptyState from '@/components/EmptyState';
+import type { Activity } from '@/context/ActivityContext';
 
 export default function ActivitiesScreen() {
+  console.log('ActivitiesScreen: Rendering...');
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [manualEntryModalVisible, setManualEntryModalVisible] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const { activities, trackActivity } = useActivities();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+
+  useEffect(() => {
+    console.log('ActivitiesScreen: Activities changed:', activities);
+  }, [activities]);
 
   const handleAddActivity = () => {
     setAddModalVisible(true);
   };
 
-  const handleActivityTap = (activityId) => {
+  const handleActivityTap = (activityId: string) => {
     trackActivity(activityId);
   };
 
-  const handleActivityLongPress = (activity) => {
+  const handleActivityLongPress = (activity: Activity) => {
     setSelectedActivity(activity);
     setManualEntryModalVisible(true);
   };
 
-  const handleManualEntry = (datetime) => {
+  const handleManualEntry = (datetime: Date) => {
     if (selectedActivity) {
       trackActivity(selectedActivity.id, datetime);
     }
