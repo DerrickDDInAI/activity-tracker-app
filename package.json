@@ -52,6 +52,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@react-native-community/cli": "^18.0.0",
+    "@react-native/gradle-plugin": "^0.79.2",
     "@types/react": "~18.2.20",
     "eas-cli": "^16.7.0",
     "typescript": "~5.8.3"
