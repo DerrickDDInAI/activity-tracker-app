@@ -1,6 +1,6 @@
 rootProject.name = 'Activity Tracker'
 
-// 1) Expo autolinking (leave as-is)
+// 1) Expo’s autolinking (leave as-is)
 apply from: new File(
     ["node", "--print", "require.resolve('expo/package.json')"]
         .execute(null, rootDir)
@@ -10,7 +10,7 @@ apply from: new File(
 )
 useExpoModules()
 
-// 2) Replace the old CLI‐platform autolinking with the new react‐native‐gradle‐plugin path
+// 2) Replace the old CLI‐platform path with the new RN Gradle plugin autolinking
 apply from: new File(
     ["node", "--print", "require.resolve('react-native-gradle-plugin/package.json')"]
         .execute(null, rootDir)
@@ -20,10 +20,10 @@ apply from: new File(
 )
 applyNativeModulesSettingsGradle(settings)
 
-// 3) Include the main app module
+// 3) Include the main “app” module
 include ':app'
 
-// 4) Include the React Native Gradle plugin build
+// 4) Include the RN Gradle plugin build itself
 includeBuild(
     new File(
         ["node", "--print", "require.resolve('@react-native/gradle-plugin/package.json')"]
