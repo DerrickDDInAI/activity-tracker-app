@@ -3,6 +3,7 @@
     "name": "Activity Tracker",
     "slug": "activity-tracker-app",
     "version": "1.0.0",
+    "sdkVersion": "49.0.0",
     "orientation": "portrait",
 
     "icon": "./assets/images/icon.png",
@@ -15,7 +16,8 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.23",
+            "kotlinVersion": "1.9.24",
+
             "usesCleartextTraffic": true,
             "compileSdkVersion": 33,
             "targetSdkVersion": 33,
@@ -23,9 +25,11 @@
           }
         }
       ],
+
       "expo-router",
       "expo-font",
       "expo-web-browser",
+
       [
         "expo-splash-screen",
         {
@@ -34,6 +38,7 @@
           "backgroundColor": "#ffffff"
         }
       ],
+
       [
         "expo-notifications",
         {
@@ -42,6 +47,7 @@
         }
       ]
     ],
+
 
     "scheme": "activitytracker",
     "userInterfaceStyle": "automatic",
@@ -54,16 +60,18 @@
 
     "android": {
       "icon": "./assets/images/icon.png",
+
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
+
       "splash": {
         "image": "./assets/images/icon.png",
         "resizeMode": "contain",
         "backgroundColor": "#ffffff"
       },
+
       "package": "com.activitytracker.app",
       "permissions": [
         "NOTIFICATIONS",
@@ -77,7 +85,7 @@
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
-
+    
     "extra": {
       "router": {
         "origin": false
