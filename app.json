@@ -1,25 +1,31 @@
 {
   "expo": {
-    "name": "bolt-expo-nativewind",
-    "slug": "bolt-expo-nativewind",
+    "name": "Activity Tracker",
+    "slug": "activity-tracker-app",
     "version": "1.0.0",
     "orientation": "portrait",
 
-    // Your app icon (used everywhere by default)
     "icon": "./assets/images/icon.png",
+    "assetBundlePatterns": [
+      "assets/images/*"
+    ],
 
-    // Use the expo-splash-screen plugin instead of the top-level splash key
-    // (it’ll generate the right native code for both iOS & Android)
     "plugins": [
-      "expo-router",
-      "expo-font",
-      "expo-web-browser",
       [
         "expo-build-properties",
         {
-          "android": {}
+          "android": {
+            "kotlinVersion": "1.9.23",
+            "usesCleartextTraffic": true,
+            "compileSdkVersion": 33,
+            "targetSdkVersion": 33,
+            "buildToolsVersion": "33.0.0"
+          }
         }
       ],
+      "expo-router",
+      "expo-font",
+      "expo-web-browser",
       [
         "expo-splash-screen",
         {
@@ -27,31 +33,58 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff"
+        }
       ]
     ],
 
-    "scheme": "myapp",
+    "scheme": "activitytracker",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
 
-    "assetBundlePatterns": [
-      "assets/images/*"
-    ],
-
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.boltexponativewind"
+      "bundleIdentifier": "com.activitytracker.app"
     },
 
     "android": {
-      // package name and any extra Gradle props
-      "package": "com.anonymous.boltexponativewind"
+      "icon": "./assets/images/icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "splash": {
+        "image": "./assets/images/icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.activitytracker.app",
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ]
     },
 
     "web": {
       "bundler": "metro",
       "output": "single",
       "favicon": "./assets/images/favicon.png"
+    },
+
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "105753f4-536f-4d5b-9a2f-18a19f3c1f51"
+      }
     }
   }
 }
