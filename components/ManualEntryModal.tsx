@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  Modal,
   View,
   Text,
-  StyleSheet,
-  Modal,
   TouchableOpacity,
+  StyleSheet,
   Platform,
+  TextInput,
+  KeyboardAvoidingView,
+  ScrollView,
   useColorScheme,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useActivities } from '@/context/ActivityContext';
-import type { Activity } from '@/context/ActivityContext';
+import { useActivities } from '../context/ActivityContext';
+import type { Activity } from '../context/ActivityContext';
 
 type ManualEntryModalProps = {
   visible: boolean;

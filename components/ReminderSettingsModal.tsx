@@ -3,12 +3,12 @@ import {
   Modal,
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
-  Switch,
+  StyleSheet,
   TextInput,
-  ScrollView,
+  Switch,
   useColorScheme,
+  ScrollView,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 

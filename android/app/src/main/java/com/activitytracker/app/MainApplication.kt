@@ -1,4 +1,4 @@
-package com.anonymous.boltexponativewind
+package com.activitytracker.app
 
 import android.app.Application
 import android.content.res.Configuration

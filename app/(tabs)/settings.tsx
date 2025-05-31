@@ -1,17 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  Switch,
   ScrollView,
+  TouchableOpacity,
+  Text,
   useColorScheme,
   Alert,
   Platform,
+  ActivityIndicator,
   Share,
 } from 'react-native';
-import { useActivities } from '@/context/ActivityContext';
+import { useActivities } from '../../context/ActivityContext';
 import { Trash2, Download, Moon, CircleAlert as AlertCircle, Info, ChevronRight } from 'lucide-react-native';
 
 export default function SettingsScreen() {

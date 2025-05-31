@@ -1,15 +1,15 @@
 import React from 'react';
 import {
+  Modal,
   View,
   Text,
-  StyleSheet,
-  Modal,
   TouchableOpacity,
-  FlatList,
+  StyleSheet,
+  ScrollView,
   useColorScheme,
 } from 'react-native';
 import { X, Check } from 'lucide-react-native';
-import { getActivityIcon } from '@/utils/activityUtils';
+import { getActivityIcon } from '../utils/activityUtils';
 
 const FilterModal = ({
   visible,
@@ -38,31 +38,30 @@ const FilterModal = ({
             </TouchableOpacity>
           </View>
 
-          <FlatList
-            data={[{ id: 'all', name: 'All Activities' }, ...activities]}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => {
-              const isSelected = selectedFilter === item.id;
+          <ScrollView>
+            {activities.map((activity) => {
+              const isSelected = selectedFilter === activity.id;
               let IconComponent = null;
-              
-              if (item.id !== 'all' && item.icon) {
-                IconComponent = getActivityIcon(item.icon);
+
+              if (activity.id !== 'all' && activity.icon) {
+                IconComponent = getActivityIcon(activity.icon);
               }
 
               return (
                 <TouchableOpacity
+                  key={activity.id}
                   style={[
                     styles.filterItem,
                     isSelected && styles.selectedItem,
                     isDark && styles.filterItemDark,
                     isSelected && isDark && styles.selectedItemDark,
                   ]}
-                  onPress={() => onSelectFilter(item.id)}>
-                  {item.id !== 'all' && IconComponent ? (
+                  onPress={() => onSelectFilter(activity.id)}>
+                  {activity.id !== 'all' && IconComponent ? (
                     <View
                       style={[
                         styles.activityIcon,
-                        { backgroundColor: item.color },
+                        { backgroundColor: activity.color },
                       ]}>
                       <IconComponent size={16} color="#FFFFFF" />
                     </View>
@@ -73,7 +72,7 @@ const FilterModal = ({
                       isDark && styles.textDark,
                       isSelected && styles.selectedItemText,
                     ]}>
-                    {item.name}
+                    {activity.name}
                   </Text>
                   {isSelected && (
                     <Check
@@ -83,8 +82,8 @@ const FilterModal = ({
                   )}
                 </TouchableOpacity>
               );
-            }}
-          />
+            })}
+          </ScrollView>
         </View>
       </View>
     </Modal>

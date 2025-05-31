@@ -3,18 +3,20 @@ import {
   Modal,
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
+  StyleSheet,
   TextInput,
   ScrollView,
-  Switch,
   useColorScheme,
+  KeyboardAvoidingView,
+  Platform,
+  Switch,
 } from 'react-native';
 import { X } from 'lucide-react-native';
-import { useActivities } from '@/context/ActivityContext';
-import { ACTIVITY_ICONS, ACTIVITY_COLORS } from '@/constants/activities';
-import { getActivityIcon } from '@/utils/activityUtils';
-import type { Activity, ActivityType } from '@/context/ActivityContext';
+import { useActivities } from '../context/ActivityContext';
+import { ACTIVITY_ICONS, ACTIVITY_COLORS } from '../constants/activities';
+import { getActivityIcon } from '../utils/activityUtils';
+import type { Activity } from '../types/activity';
 
 type ActivityIcon = {
   id: string;
@@ -34,7 +36,7 @@ export default function AddActivityModal({ visible, onClose }: AddActivityModalP
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState(ACTIVITY_COLORS[0]);
   const [selectedIcon, setSelectedIcon] = useState<ActivityIcon>(ACTIVITY_ICONS[0]);
-  const [activityType, setActivityType] = useState<ActivityType>('instant');
+  const [activityType, setActivityType] = useState<Activity['type']>('instant');
   const [enableNotifications, setEnableNotifications] = useState(false);
   const [hours, setHours] = useState('0');
   const [minutes, setMinutes] = useState('10');

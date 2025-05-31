@@ -8,11 +8,11 @@ import {
   useColorScheme,
   Alert,
 } from 'react-native';
-import { useActivities } from '@/context/ActivityContext';
-import HistoryItem from '@/components/HistoryItem';
-import EmptyState from '@/components/EmptyState';
+import { useActivities } from '../../context/ActivityContext';
+import HistoryItem from '../../components/HistoryItem';
+import EmptyState from '../../components/EmptyState';
 import { Calendar, ListFilter, Trash2 } from 'lucide-react-native';
-import FilterModal from '@/components/FilterModal';
+import FilterModal from '../../components/FilterModal';
 
 export default function HistoryScreen() {
   const { activityRecords, activities, deleteRecord, deleteSelectedRecords, clearAllActivities } = useActivities();

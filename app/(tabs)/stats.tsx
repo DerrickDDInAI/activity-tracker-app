@@ -8,7 +8,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
-import { useActivities } from '@/context/ActivityContext';
+import { useActivities } from '../../context/ActivityContext';
 import {
   format,
   startOfDay,

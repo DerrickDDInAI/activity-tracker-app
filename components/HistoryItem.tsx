@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, useColorScheme, TouchableOpacity } from 'react-native';
-import { getActivityIcon, formatDuration } from '@/utils/activityUtils';
+import { getActivityIcon, formatDuration } from '../utils/activityUtils';
 import { Check } from 'lucide-react-native';
 
 const HistoryItem = ({ record, activity, selected, onPress, onLongPress, selectionMode }) => {

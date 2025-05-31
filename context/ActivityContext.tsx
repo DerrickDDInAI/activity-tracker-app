@@ -1,87 +1,91 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { generateUUID } from '@/utils/uuid';
+import { View, ActivityIndicator, Text, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Activity, ActivityRecord, ActivityContextType, NotificationConfig } from '@/types/activity';
+import { setupNotifications } from '@/utils/notifications';
+import { generateUUID } from '@/utils/uuid';
 
-console.log('ActivityContext: Starting initialization...');
+const ACTIVITIES_STORAGE_KEY = '@activities';
+const RECORDS_STORAGE_KEY = '@activity_records';
 
-// Configure notifications
-if (Platform.OS !== 'web') {
-  console.log('ActivityContext: Setting up notifications...');
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+export const ActivityContext = createContext<ActivityContextType | null>(null);
+
+export function useActivities() {
+  const context = useContext(ActivityContext);
+  if (!context) {
+    throw new Error('useActivities must be used within an ActivityProvider');
+  }
+  return context;
 }
 
-// Define types
-export type ActivityType = 'instant' | 'duration';
-
-export type NotificationConfig = {
-  enabled: boolean;
-  hours: number;
-  minutes: number;
-  seconds: number;
-  customMessage?: string;
-};
-
-export type Activity = {
-  id: string;
-  name: string;
-  color: string;
-  icon: string;
-  type: ActivityType;
-  lastTracked?: string;
-  isTracking?: boolean;
-  trackingStartTime?: string;
-  notificationConfig?: NotificationConfig;
-  lastNotificationId?: string;
-};
-
-type ActivityRecord = {
-  id: string;
-  activityId: string;
-  timestamp: string;
-  endTimestamp?: string;
-  duration?: number; // Duration in milliseconds
-};
-
-type ActivityContextType = {
-  activities: Activity[];
-  activityRecords: ActivityRecord[];
-  addActivity: (activity: Omit<Activity, 'id'>) => void;
-  updateActivity: (activity: Activity) => void;
-  deleteActivity: (id: string) => void;
-  trackActivity: (id: string, customTimestamp?: Date) => void;
-  stopTracking: (id: string, customEndTimestamp?: Date) => void;
-  clearAllActivities: () => void;
-  deleteRecord: (id: string) => void;
-  deleteSelectedRecords: (ids: string[]) => void;
-  getLatestRecord: (activityId: string) => ActivityRecord | undefined;
-  addManualDurationRecord: (activityId: string, startTime: Date, endTime: Date) => void;
-  updateNotificationConfig: (activityId: string, config: NotificationConfig) => void;
-};
-
-// Create context
-const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
-
-// Storage keys
-const ACTIVITIES_STORAGE_KEY = '@activity_tracker_activities';
-const RECORDS_STORAGE_KEY = '@activity_tracker_records';
-
 export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  console.log('ActivityProvider: Component mounting...');
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityRecords, setActivityRecords] = useState<ActivityRecord[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Initialize context
+  useEffect(() => {
+    console.log('ActivityProvider: Starting initialization...');
+    let mounted = true;
+
+    const initialize = async () => {
+      try {
+        // Load data from storage
+        const [activitiesData, recordsData] = await Promise.all([
+          AsyncStorage.getItem(ACTIVITIES_STORAGE_KEY),
+          AsyncStorage.getItem(RECORDS_STORAGE_KEY)
+        ]);
+
+        if (!mounted) return;
+
+        // Parse and set activities
+        if (activitiesData) {
+          setActivities(JSON.parse(activitiesData));
+        }
+
+        // Parse and set records
+        if (recordsData) {
+          setActivityRecords(JSON.parse(recordsData));
+        }
+
+        // Initialize notifications
+        await setupNotifications();
+        
+        console.log('ActivityProvider: Initialization complete');
+        setIsLoading(false);
+      } catch (err) {
+        console.error('ActivityProvider: Initialization error:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to initialize');
+          setIsLoading(false);
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Save activities when they change
+  useEffect(() => {
+    if (isLoading) return;
+
+    AsyncStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities))
+      .catch(err => console.error('Error saving activities:', err));
+  }, [activities, isLoading]);
+
+  // Save records when they change
+  useEffect(() => {
+    if (isLoading) return;
+
+    AsyncStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(activityRecords))
+      .catch(err => console.error('Error saving records:', err));
+  }, [activityRecords, isLoading]);
 
   // Schedule notification for an activity
   const scheduleNotification = async (activity: Activity) => {
@@ -169,66 +173,6 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
     }
   };
-
-  // Load data from storage
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        console.log('ActivityProvider: Loading data from storage...');
-        const activitiesJson = await AsyncStorage.getItem(ACTIVITIES_STORAGE_KEY);
-        const recordsJson = await AsyncStorage.getItem(RECORDS_STORAGE_KEY);
-        
-        console.log('ActivityProvider: Activities from storage:', activitiesJson);
-        console.log('ActivityProvider: Records from storage:', recordsJson);
-        
-        if (activitiesJson) {
-          setActivities(JSON.parse(activitiesJson));
-        }
-        
-        if (recordsJson) {
-          setActivityRecords(JSON.parse(recordsJson));
-        }
-      } catch (error) {
-        console.error('Error loading data from storage:', error);
-        setError(error instanceof Error ? error.message : 'Unknown error');
-      } finally {
-        console.log('ActivityProvider: Data loading complete');
-        setIsLoaded(true);
-      }
-    };
-    
-    loadData();
-  }, []);
-
-  // Save activities to storage whenever they change
-  useEffect(() => {
-    if (!isLoaded) return;
-    
-    const saveActivities = async () => {
-      try {
-        await AsyncStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities));
-      } catch (error) {
-        console.error('Error saving activities to storage:', error);
-      }
-    };
-    
-    saveActivities();
-  }, [activities, isLoaded]);
-
-  // Save records to storage whenever they change
-  useEffect(() => {
-    if (!isLoaded) return;
-    
-    const saveRecords = async () => {
-      try {
-        await AsyncStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(activityRecords));
-      } catch (error) {
-        console.error('Error saving records to storage:', error);
-      }
-    };
-    
-    saveRecords();
-  }, [activityRecords, isLoaded]);
 
   // Get the latest record for an activity
   const getLatestRecord = (activityId: string) => {
@@ -431,11 +375,29 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setActivities([]);
   };
 
+  if (error) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: 'red' }}>Error: {error}</Text>
+      </View>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={{ marginTop: 10 }}>Loading activities...</Text>
+      </View>
+    );
+  }
+
   return (
     <ActivityContext.Provider
       value={{
         activities,
         activityRecords,
+        isLoading,
         addActivity,
         updateActivity,
         deleteActivity,
@@ -447,27 +409,9 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         getLatestRecord,
         addManualDurationRecord,
         updateNotificationConfig,
-      }}>
-      {error ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: 'red' }}>Error: {error}</Text>
-        </View>
-      ) : !isLoaded ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
-      ) : (
-        children
-      )}
+      }}
+    >
+      {children}
     </ActivityContext.Provider>
   );
-};
-
-// Custom hook to use the activity context
-export const useActivities = () => {
-  const context = useContext(ActivityContext);
-  if (context === undefined) {
-    throw new Error('useActivities must be used within an ActivityProvider');
-  }
-  return context;
 };

@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
-import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { useFrameworkReady } from '../hooks/useFrameworkReady';
 import { enableScreens } from 'react-native-screens';
-import { ActivityProvider } from '@/context/ActivityContext';
+import { ActivityProvider } from '../context/ActivityContext';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Enable screens before any navigation components render

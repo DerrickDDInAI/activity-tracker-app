@@ -9,9 +9,9 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { getLightColor, getActivityIcon, formatTimeSince, formatDuration } from '@/utils/activityUtils';
-import { useActivities } from '@/context/ActivityContext';
-import type { Activity } from '@/context/ActivityContext';
+import { getLightColor, getActivityIcon, formatTimeSince, formatDuration } from '../utils/activityUtils';
+import { useActivities } from '../context/ActivityContext';
+import type { Activity } from '../types/activity';
 import { Trash2, Bell, BellOff } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import ReminderSettingsModal from './ReminderSettingsModal';
