@@ -1,17 +1,18 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, ActivityIndicator, Text, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Activity, ActivityRecord, ActivityContextType, NotificationConfig } from '@/types/activity';
 import { setupNotifications } from '@/utils/notifications';
 import { generateUUID } from '@/utils/uuid';
+import { validateActivity, validateActivityRecord, validateNotificationConfig } from '@/utils/activityUtils';
 
 const ACTIVITIES_STORAGE_KEY = '@activities';
 const RECORDS_STORAGE_KEY = '@activity_records';
 
 export const ActivityContext = createContext<ActivityContextType | null>(null);
 
-export function useActivities() {
+export function useActivities(): ActivityContextType {
   const context = useContext(ActivityContext);
   if (!context) {
     throw new Error('useActivities must be used within an ActivityProvider');
@@ -19,20 +20,65 @@ export function useActivities() {
   return context;
 }
 
-export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+interface ErrorState {
+  message: string;
+  timestamp: number;
+}
+
+export const ActivityProvider = ({ children }: { children: React.ReactNode }): JSX.Element => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityRecords, setActivityRecords] = useState<ActivityRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<ErrorState | null>(null);
+
+  // Memoized sorted records for better performance
+  const sortedRecords = useMemo(() => 
+    [...activityRecords].sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    ), [activityRecords]
+  );
+
+  // Error handling utility
+  const handleError = useCallback((error: unknown, context: string): string => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`${context}:`, message);
+    setLastError({ message, timestamp: Date.now() });
+    return message;
+  }, []);
+
+  // Validate data before saving
+  const validateData = useCallback((): boolean => {
+    try {
+      activities.forEach(validateActivity);
+      activityRecords.forEach(validateActivityRecord);
+      return true;
+    } catch (err) {
+      handleError(err, 'Data validation failed');
+      return false;
+    }
+  }, [activities, activityRecords, handleError]);
+
+  // Enhanced persistence with validation
+  const persistData = useCallback(async (): Promise<void> => {
+    if (isLoading || !validateData()) return;
+
+    try {
+      await Promise.all([
+        AsyncStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities)),
+        AsyncStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(activityRecords))
+      ]);
+    } catch (err) {
+      handleError(err, 'Failed to persist data');
+    }
+  }, [activities, activityRecords, isLoading, validateData, handleError]);
 
   // Initialize context
   useEffect(() => {
-    console.log('ActivityProvider: Starting initialization...');
     let mounted = true;
 
-    const initialize = async () => {
+    const initialize = async (): Promise<void> => {
       try {
-        // Load data from storage
         const [activitiesData, recordsData] = await Promise.all([
           AsyncStorage.getItem(ACTIVITIES_STORAGE_KEY),
           AsyncStorage.getItem(RECORDS_STORAGE_KEY)
@@ -40,100 +86,99 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (!mounted) return;
 
-        // Parse and set activities
         if (activitiesData) {
-          setActivities(JSON.parse(activitiesData));
+          try {
+            const parsedActivities = JSON.parse(activitiesData);
+            if (Array.isArray(parsedActivities)) {
+              setActivities(parsedActivities);
+            }
+          } catch (err) {
+            handleError(err, 'Failed to parse activities');
+            setActivities([]);
+          }
         }
 
-        // Parse and set records
         if (recordsData) {
-          setActivityRecords(JSON.parse(recordsData));
+          try {
+            const parsedRecords = JSON.parse(recordsData);
+            if (Array.isArray(parsedRecords)) {
+              setActivityRecords(parsedRecords);
+            }
+          } catch (err) {
+            handleError(err, 'Failed to parse records');
+            setActivityRecords([]);
+          }
         }
 
-        // Initialize notifications
         await setupNotifications();
-        
-        console.log('ActivityProvider: Initialization complete');
         setIsLoading(false);
       } catch (err) {
-        console.error('ActivityProvider: Initialization error:', err);
         if (mounted) {
-          setError(err instanceof Error ? err.message : 'Failed to initialize');
+          const errorMessage = handleError(err, 'Initialization failed');
+          setError(errorMessage);
           setIsLoading(false);
         }
       }
     };
 
     initialize();
+    return () => { mounted = false; };
+  }, [handleError]);
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // Save activities when they change
+  // Debounced persistence
   useEffect(() => {
-    if (isLoading) return;
-
-    AsyncStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities))
-      .catch(err => console.error('Error saving activities:', err));
-  }, [activities, isLoading]);
-
-  // Save records when they change
-  useEffect(() => {
-    if (isLoading) return;
-
-    AsyncStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(activityRecords))
-      .catch(err => console.error('Error saving records:', err));
-  }, [activityRecords, isLoading]);
+    const timeoutId = setTimeout(persistData, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [persistData]);
 
   // Schedule notification for an activity
-  const scheduleNotification = async (activity: Activity) => {
+  const scheduleNotification = useCallback(async (activity: Activity): Promise<void> => {
     if (Platform.OS === 'web' || !activity.notificationConfig?.enabled) return;
 
-    // Cancel existing notification if any
-    if (activity.lastNotificationId) {
-      await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
+    try {
+      if (activity.lastNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
+      }
+
+      const { hours = 0, minutes = 0, seconds = 0 } = activity.notificationConfig;
+      const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+
+      if (!activity.lastTracked) return;
+
+      const lastTrackedDate = new Date(activity.lastTracked);
+      const now = new Date();
+      const elapsedSeconds = Math.floor((now.getTime() - lastTrackedDate.getTime()) / 1000);
+      
+      if (elapsedSeconds < totalSeconds) {
+        const remainingSeconds = totalSeconds - elapsedSeconds;
+        const message = activity.notificationConfig.customMessage ?? 
+                       `Time to check your activity "${activity.name}"`;
+
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Activity Reminder',
+            body: `${message} (${formatElapsedTime(totalSeconds * 1000)})`,
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+          },
+          trigger: {
+            type: 'timeInterval',
+            seconds: remainingSeconds,
+            repeats: false
+          } as Notifications.NotificationTriggerInput,
+        });
+
+        setActivities(prev =>
+          prev.map(a =>
+            a.id === activity.id
+              ? { ...a, lastNotificationId: notificationId }
+              : a
+          )
+        );
+      }
+    } catch (err) {
+      handleError(err, 'Failed to schedule notification');
     }
-
-    // Calculate total seconds for the reminder
-    const totalSeconds = (activity.notificationConfig.hours * 3600) + 
-                        (activity.notificationConfig.minutes * 60) + 
-                        activity.notificationConfig.seconds;
-
-    // Only schedule if we have a last tracked time
-    if (!activity.lastTracked) return;
-
-    const lastTrackedDate = new Date(activity.lastTracked);
-    const now = new Date();
-    const elapsedSeconds = Math.floor((now.getTime() - lastTrackedDate.getTime()) / 1000);
-    
-    // If elapsed time hasn't reached the threshold yet, schedule for the remaining time
-    if (elapsedSeconds < totalSeconds) {
-      const remainingSeconds = totalSeconds - elapsedSeconds;
-      const message = activity.notificationConfig.customMessage || `Time to check your activity "${activity.name}"`;
-
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Activity Reminder',
-          body: `${message} (${formatElapsedTime(totalSeconds * 1000)})`,
-        },
-        trigger: {
-          seconds: remainingSeconds,
-          repeats: false
-        } as Notifications.NotificationTriggerInput,
-      });
-
-      // Update activity with new notification ID
-      setActivities(prev =>
-        prev.map(a =>
-          a.id === activity.id
-            ? { ...a, lastNotificationId: notificationId }
-            : a
-        )
-      );
-    }
-  };
+  }, [handleError]);
 
   // Helper function to format elapsed time
   const formatElapsedTime = (ms: number) => {
@@ -148,22 +193,92 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return `${seconds}s ago`;
   };
 
-  // Update notification configuration
-  const updateNotificationConfig = async (activityId: string, config: NotificationConfig) => {
-    const activity = activities.find(a => a.id === activityId);
-    if (!activity) return;
+  // Enhanced addActivity with validation
+  const addActivity = useCallback((activity: Omit<Activity, 'id'>) => {
+    try {
+      const newActivity: Activity = {
+        ...activity,
+        id: generateUUID(),
+      };
+      
+      validateActivity(newActivity);
+      
+      setActivities(prev => [...prev, newActivity]);
 
-    const updatedActivity = { ...activity, notificationConfig: config };
-    setActivities(prev =>
-      prev.map(a => (a.id === activityId ? updatedActivity : a))
-    );
-
-    if (config.enabled) {
-      await scheduleNotification(updatedActivity);
-    } else if (activity.lastNotificationId) {
-      await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
+      if (newActivity.notificationConfig?.enabled) {
+        scheduleNotification(newActivity).catch(err => 
+          handleError(err, `Failed to schedule notification for ${newActivity.name}`)
+        );
+      }
+    } catch (err) {
+      handleError(err, 'Failed to add activity');
     }
-  };
+  }, [handleError]);
+
+  // Enhanced updateActivity with validation
+  const updateActivity = useCallback((updatedActivity: Activity) => {
+    try {
+      validateActivity(updatedActivity);
+      
+      setActivities(prev =>
+        prev.map(activity =>
+          activity.id === updatedActivity.id ? updatedActivity : activity
+        )
+      );
+
+      if (updatedActivity.notificationConfig?.enabled) {
+        scheduleNotification(updatedActivity).catch(err =>
+          handleError(err, `Failed to update notification for ${updatedActivity.name}`)
+        );
+      }
+    } catch (err) {
+      handleError(err, 'Failed to update activity');
+    }
+  }, [handleError]);
+
+  // Update notification configuration
+  const updateNotificationConfig = useCallback(async (activityId: string, config: NotificationConfig) => {
+    try {
+      validateNotificationConfig(config);
+      
+      const activity = activities.find(a => a.id === activityId);
+      if (!activity) {
+        throw new Error('Activity not found');
+      }
+
+      const updatedActivity = { ...activity, notificationConfig: config };
+      setActivities(prev =>
+        prev.map(a => (a.id === activityId ? updatedActivity : a))
+      );
+
+      if (config.enabled) {
+        await scheduleNotification(updatedActivity);
+      } else if (activity.lastNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
+      }
+    } catch (err) {
+      handleError(err, 'Failed to update notification config');
+    }
+  }, [activities, handleError]);
+
+  // Persist data with debouncing
+  useEffect(() => {
+    if (isLoading) return;
+
+    const saveData = async () => {
+      try {
+        await Promise.all([
+          AsyncStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities)),
+          AsyncStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(activityRecords))
+        ]);
+      } catch (err) {
+        console.error('Error saving data:', err);
+      }
+    };
+
+    const timeoutId = setTimeout(saveData, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [activities, activityRecords, isLoading]);
 
   // Get the latest record for an activity
   const getLatestRecord = (activityId: string) => {
@@ -174,33 +289,6 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const bTime = b.endTimestamp || b.timestamp;
         return new Date(bTime).getTime() - new Date(aTime).getTime();
       })[0];
-  };
-
-  // Add a new activity
-  const addActivity = (activity: Omit<Activity, 'id'>) => {
-    const newActivity: Activity = {
-      ...activity,
-      id: generateUUID(),
-    };
-    
-    setActivities((prev) => [...prev, newActivity]);
-
-    if (newActivity.notificationConfig?.enabled) {
-      scheduleNotification(newActivity);
-    }
-  };
-
-  // Update an existing activity
-  const updateActivity = (updatedActivity: Activity) => {
-    setActivities((prev) =>
-      prev.map((activity) =>
-        activity.id === updatedActivity.id ? updatedActivity : activity
-      )
-    );
-
-    if (updatedActivity.notificationConfig?.enabled) {
-      scheduleNotification(updatedActivity);
-    }
   };
 
   // Delete an activity
@@ -231,97 +319,62 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const timestamp = customTimestamp ? customTimestamp.toISOString() : new Date().toISOString();
     
-    if (activity.type === 'duration') {
-      // For duration activities, start tracking
-      setActivities(prev => 
-        prev.map(a => 
-          a.id === id 
-            ? { ...a, isTracking: true, trackingStartTime: timestamp }
-            : a
-        )
-      );
-    } else {
-      // For instant activities, create record immediately
-      const newRecord: ActivityRecord = {
-        id: generateUUID(),
-        activityId: id,
-        timestamp,
-      };
-      
-      setActivityRecords(prev => [...prev, newRecord]);
-      setActivities(prev =>
-        prev.map(a =>
-          a.id === id
-            ? { ...a, lastTracked: timestamp }
-            : a
-        )
-      );
-
-      // Schedule notification if enabled
-      if (activity.notificationConfig?.enabled) {
-        await scheduleNotification(activity);
-      }
+    if (activity.lastTracked && new Date(activity.lastTracked).getTime() > new Date(timestamp).getTime()) {
+      handleError(new Error('Cannot track activity to an earlier time'), 'Track Activity');
+      return;
     }
-  };
-
-  // Stop tracking an activity
-  const stopTracking = async (id: string, customEndTimestamp?: Date) => {
-    const activity = activities.find(a => a.id === id);
-    if (!activity || !activity.isTracking || !activity.trackingStartTime) return;
-
-    const endTimestamp = customEndTimestamp ? customEndTimestamp.toISOString() : new Date().toISOString();
-    const startTime = new Date(activity.trackingStartTime).getTime();
-    const endTime = new Date(endTimestamp).getTime();
-    const duration = endTime - startTime;
 
     const newRecord: ActivityRecord = {
       id: generateUUID(),
       activityId: id,
-      timestamp: activity.trackingStartTime,
-      endTimestamp,
-      duration,
+      timestamp,
+      type: 'manual',
     };
 
     setActivityRecords(prev => [...prev, newRecord]);
     setActivities(prev =>
       prev.map(a =>
         a.id === id
-          ? { ...a, isTracking: false, trackingStartTime: undefined, lastTracked: endTimestamp }
+          ? { ...a, lastTracked: timestamp }
           : a
       )
     );
 
-    // Schedule notification if enabled
+    // Reschedule notification if needed
     if (activity.notificationConfig?.enabled) {
       await scheduleNotification(activity);
     }
   };
 
-  // Add a manual duration record
-  const addManualDurationRecord = async (activityId: string, startTime: Date, endTime: Date) => {
-    const activity = activities.find(a => a.id === activityId);
+  // Stop tracking an activity (update the end time of the latest record)
+  const stopTracking = async (id: string) => {
+    const activity = activities.find(a => a.id === id);
     if (!activity) return;
 
-    const duration = endTime.getTime() - startTime.getTime();
-    
-    const newRecord: ActivityRecord = {
-      id: generateUUID(),
-      activityId,
-      timestamp: startTime.toISOString(),
-      endTimestamp: endTime.toISOString(),
-      duration,
+    const latestRecord = getLatestRecord(id);
+    if (!latestRecord) return;
+
+    const updatedRecord: ActivityRecord = {
+      ...latestRecord,
+      endTimestamp: new Date().toISOString(),
     };
 
-    setActivityRecords(prev => [...prev, newRecord]);
+    setActivityRecords(prev =>
+      prev.map(record =>
+        record.id === latestRecord.id ? updatedRecord : record
+      )
+    );
+
+    // Update activity's lastTracked time
     setActivities(prev =>
       prev.map(a =>
-        a.id === activityId
-          ? { ...a, lastTracked: endTime.toISOString() }
+        a.id === id
+          ? { ...a, lastTracked: updatedRecord.endTimestamp }
           : a
       )
     );
 
-    // Schedule notification if enabled
+    // Reschedule notification if needed
     if (activity.notificationConfig?.enabled) {
       await scheduleNotification(activity);
     }
@@ -329,23 +382,104 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Clear all activities and records
   const clearAllActivities = async () => {
-    // Cancel all notifications
-    if (Platform.OS !== 'web') {
-      for (const activity of activities) {
-        if (activity.lastNotificationId) {
-          await Notifications.cancelScheduledNotificationAsync(activity.lastNotificationId);
-        }
-      }
+    try {
+      await AsyncStorage.multiRemove([ACTIVITIES_STORAGE_KEY, RECORDS_STORAGE_KEY]);
+      setActivities([]);
+      setActivityRecords([]);
+    } catch (err) {
+      handleError(err, 'Failed to clear activities');
     }
-    
-    setActivityRecords([]);
-    setActivities([]);
   };
+
+  // Add a manual duration record for an activity
+  const addManualDurationRecord = useCallback(async (
+    activityId: string,
+    startTime: Date,
+    endTime: Date,
+    note?: string
+  ) => {
+    try {
+      if (endTime.getTime() <= startTime.getTime()) {
+        throw new Error('End time must be after start time');
+      }
+
+      const activity = activities.find(a => a.id === activityId);
+      if (!activity) {
+        throw new Error('Activity not found');
+      }
+
+      const newRecord: ActivityRecord = {
+        id: generateUUID(),
+        activityId,
+        timestamp: startTime.toISOString(),
+        endTimestamp: endTime.toISOString(),
+        type: 'manual',
+        note
+      };
+
+      validateActivityRecord(newRecord);
+
+      setActivityRecords(prev => [...prev, newRecord]);
+      setActivities(prev =>
+        prev.map(a =>
+          a.id === activityId
+            ? { ...a, lastTracked: endTime.toISOString() }
+            : a
+        )
+      );
+
+      // Reschedule notification if needed
+      if (activity.notificationConfig?.enabled) {
+        await scheduleNotification(activity);
+      }
+    } catch (err) {
+      handleError(err, 'Failed to add manual duration record');
+    }
+  }, [activities, handleError, scheduleNotification]);
+
+  const contextValue = useMemo((): ActivityContextType => ({
+    activities,
+    activityRecords: sortedRecords,
+    isLoading,
+    lastError,
+    addActivity,
+    updateActivity,
+    deleteActivity,
+    trackActivity,
+    stopTracking,
+    clearAllActivities,
+    deleteRecord,
+    deleteSelectedRecords,
+    getLatestRecord,
+    addManualDurationRecord,
+    updateNotificationConfig,
+  }), [
+    activities,
+    sortedRecords,
+    isLoading,
+    lastError,
+    addActivity,
+    updateActivity,
+    deleteActivity,
+    trackActivity,
+    stopTracking,
+    clearAllActivities,
+    deleteRecord,
+    deleteSelectedRecords,
+    getLatestRecord,
+    addManualDurationRecord,
+    updateNotificationConfig,
+  ]);
 
   if (error) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: 'red' }}>Error: {error}</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: 'red', fontSize: 16, textAlign: 'center', marginBottom: 10 }}>
+          Error: {error}
+        </Text>
+        <Text style={{ color: '#666', textAlign: 'center' }}>
+          Please try restarting the app. If the problem persists, contact support.
+        </Text>
       </View>
     );
   }
@@ -354,30 +488,13 @@ export const ActivityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={{ marginTop: 10 }}>Loading activities...</Text>
+        <Text style={{ marginTop: 10, color: '#666' }}>Loading activities...</Text>
       </View>
     );
   }
 
   return (
-    <ActivityContext.Provider
-      value={{
-        activities,
-        activityRecords,
-        isLoading,
-        addActivity,
-        updateActivity,
-        deleteActivity,
-        trackActivity,
-        stopTracking,
-        clearAllActivities,
-        deleteRecord,
-        deleteSelectedRecords,
-        getLatestRecord,
-        addManualDurationRecord,
-        updateNotificationConfig,
-      }}
-    >
+    <ActivityContext.Provider value={contextValue}>
       {children}
     </ActivityContext.Provider>
   );
